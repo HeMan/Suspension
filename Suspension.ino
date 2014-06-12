@@ -13,6 +13,9 @@
 LCD::Serial3W port;
 PCD8544 lcd(&port);
 
+#define POWER 256
+#define ALPHA 178
+#define AALPHA 0.3
 
 class Compressor {
   private:
@@ -35,9 +38,11 @@ class Strut : public Periodic {
   private:
     uint16_t desired;
     uint16_t actual;
+    uint16_t smoothed;
     AnalogPin sensor;
     OutputPin vent;
     Compressor* compr;
+    bool comprstate = false;
     int eepromlocation;
   public:
     Strut(Board::AnalogPin _sensor, Board::DigitalPin _vent, Compressor *_compr, int _eepromlocation, uint16_t ms=2000) : Periodic(ms), 
@@ -51,22 +56,29 @@ class Strut : public Periodic {
 void Strut::run() {
   // Read
   actual=sensor.sample();
+  //smoothed = (ALPHA * actual + (POWER - ALPHA) * smoothed )/ POWER;
+  smoothed = AALPHA * actual + (1 - AALPHA) * smoothed;
+
   // Calculate
   // Write
   //vent.toggle();
   lcd.putchar('\f');
-  trace << actual;
-  lcd.draw_bar((actual * 100L)/1023, lcd.WIDTH - 20);
-  if (actual < 300) {
+  trace << actual << endl;
+  trace << smoothed << endl;
+  lcd.draw_bar((smoothed * 100L)/1023, lcd.WIDTH - 20);
+  if (smoothed < 300) {
+    if (!comprstate) { comprstate=true; compr->off(); }
     vent.off();
-  } else if ((actual > 300) and (actual < 600)) {
+  } else if ((smoothed > 300) and (smoothed < 600)) {
+    if (comprstate) { comprstate=false; compr->on(); }
     vent.on();
-  } else if (actual > 600) {
+  } else if (smoothed  > 600) {
     vent.off();
   }
 }
 
-Strut strut1(Board::A0, Board::D2, 0, 512);
+Compressor compressor(Board::D3);
+Strut strut1(Board::A0, Board::D2, &compressor, 0, 512);
 
 OutputPin die(Board::D4);
 
