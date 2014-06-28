@@ -1,17 +1,18 @@
 #include "Cosa/Types.h"
 #include "Cosa/Trace.hh"
 #include "Cosa/Watchdog.hh"
-#include "Cosa/Canvas/OffScreen.hh"
+#include "Cosa/Periodic.hh"
+#include "Cosa/EEPROM.hh"
+
 #include "Cosa/LCD/Driver/PCD8544.hh"
 #include "Cosa/Canvas/Font/FixedNums8x16.hh"
-#include "Cosa/Canvas/Icon/arduino_icon_64x32.h"
-#include "Cosa/Canvas/Icon/arduino_icon_96x32.h"
+
 #include "Cosa/AnalogPin.hh"
 #include "Cosa/OutputPin.hh"
-#include "Cosa/Periodic.hh"
 
 LCD::Serial3W port;
 PCD8544 lcd(&port);
+EEPROM eeprom;
 
 #define POWER 256
 #define ALPHA 178
@@ -43,15 +44,30 @@ class Strut : public Periodic {
     OutputPin vent;
     Compressor* compr;
     bool comprstate = false;
-    int eepromlocation;
+    uint16_t* eepromlocation;
   public:
-    Strut(Board::AnalogPin _sensor, Board::DigitalPin _vent, Compressor *_compr, int _eepromlocation, uint16_t ms=2000) : Periodic(ms), 
-                sensor(_sensor), vent(_vent), eepromlocation(_eepromlocation), compr(_compr) {};
+    Strut(Board::AnalogPin _sensor, Board::DigitalPin _vent, Compressor *_compr, uint8_t _eepromlocation, uint16_t ms=2000) : Periodic(ms), 
+                sensor(_sensor), vent(_vent), eepromlocation((uint16_t*)(_eepromlocation*sizeof(uint16_t))), compr(_compr) {};
     virtual void run();
-    int GetDesired();
-    int SetDesired(int newdesired);
-    int GetActual();
+    uint16_t GetDesired();
+    uint16_t SetDesired(uint16_t newdesired);
+    uint16_t GetActual();
 };
+
+uint16_t Strut::GetDesired() {
+  eeprom.read<uint16_t>(&desired, eepromlocation);
+  return desired;
+}
+
+uint16_t Strut::SetDesired(uint16_t newdesired) {
+  desired=newdesired;
+  eeprom.write<uint16_t>(eepromlocation, &desired);
+  return desired;
+}
+
+uint16_t Strut::GetActual() {
+  return actual;
+}
 
 void Strut::run() {
   // Read
@@ -77,10 +93,11 @@ void Strut::run() {
   }
 }
 
-Compressor compressor(Board::D3);
-Strut strut1(Board::A0, Board::D2, &compressor, 0, 512);
-
-OutputPin die(Board::D4);
+Compressor compressor(Board::D2);
+Strut strut1(Board::A0, Board::D3, &compressor, 0);
+Strut strut2(Board::A1, Board::D4, &compressor, 1);
+Strut strut3(Board::A2, Board::D5, &compressor, 2);
+Strut strut4(Board::A3, Board::D6, &compressor, 3);
 
 void setup() {
   Watchdog::begin(16, Watchdog::push_timeout_events);
@@ -93,6 +110,9 @@ void setup() {
   
     
   strut1.begin();
+  strut2.begin();
+  strut3.begin();
+  strut4.begin();
 }
 
 void loop() {
