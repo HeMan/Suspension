@@ -1,6 +1,7 @@
 #include "Cosa/Types.h"
 #include "Cosa/Trace.hh"
 #include "Cosa/Watchdog.hh"
+#include "Cosa/Menu.hh"
 #include "Cosa/Periodic.hh"
 #include "Cosa/EEPROM.hh"
 
@@ -78,10 +79,10 @@ void Strut::run() {
   // Calculate
   // Write
   //vent.toggle();
-  lcd.putchar('\f');
-  trace << actual << endl;
-  trace << smoothed << endl;
-  lcd.draw_bar((smoothed * 100L)/1023, lcd.WIDTH - 20);
+//  lcd.putchar('\f');
+//  trace << actual << endl;
+//  trace << smoothed << endl;
+//  lcd.draw_bar((smoothed * 100L)/1023, lcd.WIDTH - 20);
   if (smoothed < 300) {
     if (!comprstate) { comprstate=true; compr->off(); }
     vent.off();
@@ -99,6 +100,21 @@ Strut strut2(Board::A1, Board::D4, &compressor, 1);
 Strut strut3(Board::A2, Board::D5, &compressor, 2);
 Strut strut4(Board::A3, Board::D6, &compressor, 3);
 
+int16_t limit = 42;
+MENU_INT_RANGE(limit_range,"Limit",-10,100,limit)
+
+MENU_BEGIN(options_menu,"Options")
+  MENU_ITEM(limit_range)
+MENU_END(options_menu)
+
+MENU_BEGIN(root_menu,"Demo")
+  MENU_ITEM(options_menu)
+MENU_END(root_menu)
+
+Menu::Walker walker(&lcd, &root_menu);
+// Menu::KeypadController keypad(&walker);
+Menu::RotaryController rotary(&walker, Board::PCI6, Board::PCI7, Board::D13);
+
 void setup() {
   Watchdog::begin(16, Watchdog::push_timeout_events);
   
@@ -108,6 +124,8 @@ void setup() {
   trace.begin(&lcd);
   trace << PSTR("JEPPE RULES");
   
+  walker.begin();
+  rotary.begin();
     
   strut1.begin();
   strut2.begin();
