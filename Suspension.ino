@@ -11,6 +11,19 @@
 #include "Cosa/AnalogPin.hh"
 #include "Cosa/OutputPin.hh"
 
+#define STRUT(var,name,sensor,vent,eepromlocation)      \
+  Strut var(sensor, vent, &compressor, eepromlocation); \
+  const char var ## _name[] PROGMEM = name;             \
+  const Menu::int_range_t var ## _menu PROGMEM = {      \
+  {                                                     \
+    Menu::INT_RANGE,                                    \
+    var ## _name                                        \
+  },                                                    \
+  0,                                                    \
+  1023,                                                 \
+  &var.desired                                          \
+};
+
 LCD::Serial3W port;
 PCD8544 lcd(&port);
 EEPROM eeprom;
@@ -18,14 +31,14 @@ EEPROM eeprom;
 #define POWER 256
 #define ALPHA 178
 #define AALPHA 0.3
-
+#define HYSTERESIS 100
 class Compressor {
   private:
     OutputPin compr;
-    uint8_t count;
-    uint8_t maxon;
+    int8_t count;
+    int8_t maxon;
   public:
-    Compressor(Board::DigitalPin _comp, uint8_t _max=4) : compr(_comp), count(0), maxon(_max) {};
+    Compressor(Board::DigitalPin _comp, int8_t _max=4) : compr(_comp), count(0), maxon(_max) {};
     void on() { if (count==0) { compr.on(); };
                 if (count<=maxon) { count++; };
     };
@@ -38,35 +51,57 @@ class Compressor {
     
 class Strut : public Periodic {
   private:
-    uint16_t desired;
-    uint16_t actual;
-    uint16_t smoothed;
+    int16_t actual;
+    int16_t saveddesired;
+    int16_t smoothed;
     AnalogPin sensor;
     OutputPin vent;
     Compressor* compr;
-    bool comprstate = false;
-    uint16_t* eepromlocation;
+    bool comprstate;
+    int16_t* eepromlocation;
   public:
-    Strut(Board::AnalogPin _sensor, Board::DigitalPin _vent, Compressor *_compr, uint8_t _eepromlocation, uint16_t ms=2000) : Periodic(ms), 
-                sensor(_sensor), vent(_vent), eepromlocation((uint16_t*)(_eepromlocation*sizeof(uint16_t))), compr(_compr) {};
+    Strut(Board::AnalogPin _sensor, Board::DigitalPin _vent, Compressor *_compr, int8_t _eepromlocation, uint16_t ms=2000);
     virtual void run();
-    uint16_t GetDesired();
-    uint16_t SetDesired(uint16_t newdesired);
-    uint16_t GetActual();
+    int16_t GetDesired();
+    int16_t SetDesired();
+    int16_t SetDesired(int16_t newdesired);
+    int16_t GetActual();
+    int16_t desired;
 };
 
-uint16_t Strut::GetDesired() {
-  eeprom.read<uint16_t>(&desired, eepromlocation);
+Strut::Strut(Board::AnalogPin _sensor,
+             Board::DigitalPin _vent,
+             Compressor *_compr,
+             int8_t _eepromlocation,
+             uint16_t ms) :             Periodic(ms),
+                                        sensor(_sensor),
+                                        vent(_vent),
+                                        compr(_compr) {
+  eepromlocation = (int16_t*)(_eepromlocation*sizeof(int16_t));
+  comprstate = false;
+  GetDesired();
+};
+
+int16_t Strut::GetDesired() {
+  eeprom.read<int16_t>(&desired, eepromlocation);
+  saveddesired=desired;
   return desired;
 }
 
-uint16_t Strut::SetDesired(uint16_t newdesired) {
+int16_t Strut::SetDesired() {
+  if (saveddesired != desired) {
+    eeprom.write<int16_t>(eepromlocation, &desired);
+  }
+  return desired;
+}
+
+int16_t Strut::SetDesired(int16_t newdesired) {
   desired=newdesired;
-  eeprom.write<uint16_t>(eepromlocation, &desired);
+  eeprom.write<int16_t>(eepromlocation, &desired);
   return desired;
 }
 
-uint16_t Strut::GetActual() {
+int16_t Strut::GetActual() {
   return actual;
 }
 
@@ -78,47 +113,40 @@ void Strut::run() {
 
   // Calculate
   // Write
-  //vent.toggle();
-//  lcd.putchar('\f');
-//  trace << actual << endl;
-//  trace << smoothed << endl;
-//  lcd.draw_bar((smoothed * 100L)/1023, lcd.WIDTH - 20);
-  if (smoothed < 300) {
+  SetDesired();
+  if (smoothed < desired - HYSTERESIS) {
     if (!comprstate) { comprstate=true; compr->off(); }
     vent.off();
-  } else if ((smoothed > 300) and (smoothed < 600)) {
+  } else if ((smoothed > desired + HYSTERESIS) and (smoothed < desired - HYSTERESIS)) {
     if (comprstate) { comprstate=false; compr->on(); }
     vent.on();
-  } else if (smoothed  > 600) {
+  } else if (smoothed  > desired + HYSTERESIS) {
     vent.off();
   }
 }
 
 Compressor compressor(Board::D2);
-Strut strut1(Board::A0, Board::D3, &compressor, 0);
-Strut strut2(Board::A1, Board::D4, &compressor, 1);
-Strut strut3(Board::A2, Board::D5, &compressor, 2);
-Strut strut4(Board::A3, Board::D6, &compressor, 3);
+STRUT(strut1, "Front Left",  Board::A0, Board::D3, 0);
+STRUT(strut2, "Front Right", Board::A1, Board::D4, 1);
+STRUT(strut3, "Rear Left",   Board::A2, Board::D5, 2);
+STRUT(strut4, "Rear Right",  Board::A3, Board::D6, 3);
 
-int16_t limit = 42;
-MENU_INT_RANGE(limit_range,"Limit",-10,100,limit)
-
-MENU_BEGIN(options_menu,"Options")
-  MENU_ITEM(limit_range)
-MENU_END(options_menu)
 
 MENU_BEGIN(root_menu,"Demo")
-  MENU_ITEM(options_menu)
+  MENU_ITEM(strut1_menu)
+  MENU_ITEM(strut2_menu)
+  MENU_ITEM(strut3_menu)
+  MENU_ITEM(strut4_menu)
 MENU_END(root_menu)
 
 Menu::Walker walker(&lcd, &root_menu);
-// Menu::KeypadController keypad(&walker);
-Menu::RotaryController rotary(&walker, Board::PCI6, Board::PCI7, Board::D13);
+Menu::RotaryController rotary(&walker, Board::PCI10, Board::PCI11, Board::D13);
 
 void setup() {
   Watchdog::begin(16, Watchdog::push_timeout_events);
   
   lcd.begin();
+  lcd.display_contrast(30);
   lcd.putchar('\f');
   
   trace.begin(&lcd);
