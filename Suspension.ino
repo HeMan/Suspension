@@ -24,7 +24,7 @@
   &var.desired                                          \
 };
 
-LCD::Serial3W port;
+LCD::SPI3W port;
 PCD8544 lcd(&port);
 EEPROM eeprom;
 
@@ -140,7 +140,7 @@ MENU_BEGIN(root_menu,"Demo")
 MENU_END(root_menu)
 
 Menu::Walker walker(&lcd, &root_menu);
-Menu::RotaryController rotary(&walker, Board::PCI10, Board::PCI11, Board::D13);
+Menu::RotaryController rotary(&walker, Board::PCI10, Board::PCI12, Board::D7);
 
 void setup() {
   Watchdog::begin(16, Watchdog::push_timeout_events);
