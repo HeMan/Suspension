@@ -1,0 +1,34 @@
+Luftfjädring
+============
+Jimmy Hedman <jimmy.hedman@gmail.com>
+v1.0, April 2014:
+Första utkast.
+
+
+
+IO
+--
+Digital
+~~~~~~~
+[start=2]
+. [O] Compressor
+. [O] Front left vent
+. [O] Front right vent
+. [O] Rear left vent
+. [O] Rear right vent
+. [I] Rotation sensor, button
+. [O] Display, DC
+. [O] Display, CE
+. [I] Rotation sensor, DT
+. [O] Display, DIN
+. [I] Rotation sensor, CLK
+. [O] Display, CLK
+
+Analog
+~~~~~~
+[start=0]
+. Front left sensor
+. Front right sensor
+. Rear left sensor
+. Rear right sensor
+
