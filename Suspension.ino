@@ -67,6 +67,7 @@ class Strut : public Periodic {
     int16_t SetDesired(int16_t newdesired);
     int16_t GetActual();
     int16_t desired;
+    bool is_leveled;
 };
 
 Strut::Strut(Board::AnalogPin _sensor,
@@ -79,12 +80,13 @@ Strut::Strut(Board::AnalogPin _sensor,
                                         compr(_compr) {
   eepromlocation = (int16_t*)(_eepromlocation*sizeof(int16_t));
   comprstate = false;
+  is_leveled = false;
   GetDesired();
 };
 
 int16_t Strut::GetDesired() {
   eeprom.read<int16_t>(&desired, eepromlocation);
-  saveddesired=desired;
+  saveddesired = desired;
   return desired;
 }
 
@@ -96,7 +98,7 @@ int16_t Strut::SetDesired() {
 }
 
 int16_t Strut::SetDesired(int16_t newdesired) {
-  desired=newdesired;
+  desired = newdesired;
   eeprom.write<int16_t>(eepromlocation, &desired);
   return desired;
 }
@@ -115,12 +117,15 @@ void Strut::run() {
   // Write
   SetDesired();
   if (smoothed < desired - HYSTERESIS) {
+    is_leveled = false;
     if (!comprstate) { comprstate=true; compr->off(); }
     vent.off();
   } else if ((smoothed > desired + HYSTERESIS) and (smoothed < desired - HYSTERESIS)) {
+    is_leveled = true;
     if (comprstate) { comprstate=false; compr->on(); }
     vent.on();
   } else if (smoothed  > desired + HYSTERESIS) {
+    is_leveled = false;
     vent.off();
   }
 }
@@ -159,6 +164,11 @@ void setup() {
   strut2.begin();
   strut3.begin();
   strut4.begin();
+  while (!strut1.is_leveled && !strut2.is_leveled) {
+    strut1.run();
+    strut2.run();
+    delay(2000);
+  }
 }
 
 void loop() {
