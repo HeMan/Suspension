@@ -162,13 +162,15 @@ void setup() {
     
   strut1.begin();
   strut2.begin();
+
+  while (!strut1.is_leveled && !strut2.is_leveled) {
+    Event event;
+    Event::queue.await(&event);
+    event.dispatch();
+  }
+
   strut3.begin();
   strut4.begin();
-  while (!strut1.is_leveled && !strut2.is_leveled) {
-    strut1.run();
-    strut2.run();
-    delay(2000);
-  }
 }
 
 void loop() {
