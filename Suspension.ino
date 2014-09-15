@@ -17,7 +17,7 @@
   const Menu::int_range_t var ## _menu PROGMEM = {      \
   {                                                     \
     Menu::INT_RANGE,                                    \
-    var ## _name                                        \
+    (str_P) var ## _name                                        \
   },                                                    \
   0,                                                    \
   1023,                                                 \
